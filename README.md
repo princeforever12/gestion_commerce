@@ -13,6 +13,8 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 - Vente avec décrémentation FIFO du stock.
 - Rapport du jour (total HT/TVA/TTC) et top produits.
 - Alerte de stock bas.
+- Alerte de péremption (lots <= 90 jours).
+- Exclusion des lots expirés lors des ventes (FIFO sur lots valides).
 
 ## Lancement
 ```bash

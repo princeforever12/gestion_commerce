@@ -6,7 +6,7 @@ from pharmacy_pos.services.bootstrap_service import bootstrap
 from pharmacy_pos.services.product_service import create_product, list_products
 from pharmacy_pos.services.report_service import daily_sales_summary, top_products
 from pharmacy_pos.services.sales_service import create_sale
-from pharmacy_pos.services.stock_service import add_stock, get_low_stock_products
+from pharmacy_pos.services.stock_service import add_stock, get_expiring_batches, get_low_stock_products
 
 
 class Palette:
@@ -223,7 +223,10 @@ class StockTab(ttk.Frame):
             self.products.column(col, width=w, anchor="center" if col != "name" else "w")
         self.products.pack(fill="both", expand=True, pady=(0, 8))
 
-        ttk.Button(left, text="Voir alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(anchor="e")
+        actions_left = ttk.Frame(left, style="Card.TFrame")
+        actions_left.pack(anchor="e")
+        ttk.Button(actions_left, text="Alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(side="left", padx=(0, 6))
+        ttk.Button(actions_left, text="Péremptions <= 90j", style="Secondary.TButton", command=self.show_expiry_alerts).pack(side="left")
 
         ttk.Label(right, text="Nouveau produit", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
 
@@ -341,14 +344,28 @@ class StockTab(ttk.Frame):
         messagebox.showinfo("Succès", f"Lot ajouté ID={batch_id}")
         self.refresh_products()
 
+
+    def show_expiry_alerts(self) -> None:
+        rows = get_expiring_batches(90)
+        if not rows:
+            messagebox.showinfo("Péremption", "Aucun lot à risque dans les 90 jours")
+            return
+
+        lines = [
+            f"- {r['product_name']} | lot={r['batch_number']} | exp={r['expiry_date']} | qte={r['quantity']}"
+            for r in rows[:20]
+        ]
+        if len(rows) > 20:
+            lines.append(f"... et {len(rows)-20} autre(s)")
+        messagebox.showwarning("Lots à péremption proche", "\n".join(lines))
+
     def show_alerts(self) -> None:
         alerts = get_low_stock_products()
         if not alerts:
             messagebox.showinfo("Alertes", "Aucune alerte de stock bas")
             return
 
-        message = "
-".join([f"- {a['name']}: {a['stock']} (min={a['min_stock']})" for a in alerts])
+        message = "\n".join([f"- {a['name']}: {a['stock']} (min={a['min_stock']})" for a in alerts])
         messagebox.showwarning("Stock bas", message)
 
 

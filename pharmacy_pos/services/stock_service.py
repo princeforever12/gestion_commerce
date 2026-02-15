@@ -37,8 +37,27 @@ def get_low_stock_products() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_expiring_batches(days: int = 90) -> list[dict]:
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT b.id, p.name AS product_name, b.batch_number, b.expiry_date, b.quantity
+            FROM batches b
+            JOIN products p ON p.id = b.product_id
+            WHERE b.quantity > 0
+              AND DATE(b.expiry_date) <= DATE('now', '+' || ? || ' day')
+            ORDER BY DATE(b.expiry_date) ASC
+            """,
+            (days,),
+        )
+        rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
 def reserve_stock_fifo(product_id: int, quantity: int) -> list[tuple[int, int]]:
-    """Retourne liste de (batch_id, qty_pris) en FIFO par date de péremption."""
+    """Retourne liste de (batch_id, qty_pris) en FIFO par date de péremption.
+    Les lots expirés sont exclus.
+    """
     remaining = quantity
     allocations: list[tuple[int, int]] = []
 
@@ -47,7 +66,9 @@ def reserve_stock_fifo(product_id: int, quantity: int) -> list[tuple[int, int]]:
             """
             SELECT id, quantity
             FROM batches
-            WHERE product_id = ? AND quantity > 0
+            WHERE product_id = ?
+              AND quantity > 0
+              AND DATE(expiry_date) >= DATE('now')
             ORDER BY expiry_date ASC, id ASC
             """,
             (product_id,),
@@ -64,7 +85,7 @@ def reserve_stock_fifo(product_id: int, quantity: int) -> list[tuple[int, int]]:
                 remaining -= take
 
         if remaining > 0:
-            raise ValueError("Stock insuffisant")
+            raise ValueError("Stock insuffisant (lots valides non expirés)")
 
         for batch_id, take in allocations:
             cur.execute("UPDATE batches SET quantity = quantity - ? WHERE id = ?", (take, batch_id))
