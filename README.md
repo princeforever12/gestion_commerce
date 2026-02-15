@@ -25,3 +25,11 @@ python app.py
 
 ## Notes
 - La couche métier est découplée de l'UI, ce qui facilite le passage futur vers FastAPI/Streamlit si besoin.
+
+
+## Workflow Git (anti-conflits)
+- Guide détaillé: `docs/GIT_MERGE_GUIDE.md`
+- Script d'aide (depuis ta branche de PR):
+```bash
+./tools/sync_main.sh
+```

@@ -9,7 +9,6 @@ from pharmacy_pos.services.sales_service import create_sale
 from pharmacy_pos.services.stock_service import add_stock, get_low_stock_products
 
 
- codex/propose-complete-cash-register-system-design-ah3cit
 class Palette:
     BG = "#f4f6fb"
     CARD = "#ffffff"
@@ -85,29 +84,6 @@ class LoginFrame(ttk.Frame):
 
         card.columnconfigure(1, weight=1)
         self.username.focus_set()
-class LoginFrame(ttk.Frame):
-    def __init__(self, master: tk.Tk, on_login):
-        super().__init__(master, padding=16)
-        self.on_login = on_login
-
-        ttk.Label(self, text="Gestion de caisse Pharmacie", font=("Arial", 16, "bold")).grid(
-            row=0, column=0, columnspan=2, pady=(0, 16)
-        )
-
-        ttk.Label(self, text="Utilisateur").grid(row=1, column=0, sticky="w")
-        self.username = ttk.Entry(self)
-        self.username.grid(row=1, column=1, sticky="ew", pady=4)
-
-        ttk.Label(self, text="Mot de passe").grid(row=2, column=0, sticky="w")
-        self.password = ttk.Entry(self, show="*")
-        self.password.grid(row=2, column=1, sticky="ew", pady=4)
-
-        ttk.Button(self, text="Se connecter", command=self._submit).grid(
-            row=3, column=0, columnspan=2, pady=12
-        )
-
-        self.columnconfigure(1, weight=1)
- main
 
     def _submit(self) -> None:
         user = authenticate(self.username.get().strip(), self.password.get().strip())
@@ -119,7 +95,6 @@ class LoginFrame(ttk.Frame):
 
 class DashboardFrame(ttk.Frame):
     def __init__(self, master: tk.Tk, user: User):
- codex/propose-complete-cash-register-system-design-ah3cit
         super().__init__(master, padding=16, style="App.TFrame")
         self.user = user
 
@@ -139,33 +114,9 @@ class DashboardFrame(ttk.Frame):
         notebook.add(StockTab(notebook), text="Stock")
         notebook.add(ReportTab(notebook), text="Rapports")
 
-        super().__init__(master, padding=12)
-        self.user = user
-
-        header = ttk.Frame(self)
-        header.pack(fill="x")
-        ttk.Label(
-            header,
-            text=f"Connecté: {self.user.username} ({self.user.role})",
-            font=("Arial", 11, "bold"),
-        ).pack(side="left")
-
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, pady=(10, 0))
-
-        self.pos_tab = PosTab(notebook, user.id)
-        self.stock_tab = StockTab(notebook)
-        self.report_tab = ReportTab(notebook)
-
-        notebook.add(self.pos_tab, text="Caisse")
-        notebook.add(self.stock_tab, text="Stock")
-        notebook.add(self.report_tab, text="Rapports")
- main
-
 
 class PosTab(ttk.Frame):
     def __init__(self, master, cashier_id: int):
- codex/propose-complete-cash-register-system-design-ah3cit
         super().__init__(master, padding=12, style="App.TFrame")
         self.cashier_id = cashier_id
 
@@ -205,40 +156,6 @@ class PosTab(ttk.Frame):
         card.columnconfigure(0, weight=1)
         card.rowconfigure(3, weight=1)
 
-        super().__init__(master, padding=8)
-        self.cashier_id = cashier_id
-
-        ttk.Label(self, text="Vente rapide", font=("Arial", 12, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="ID produit").grid(row=1, column=0, sticky="w")
-        ttk.Label(self, text="Quantité").grid(row=1, column=1, sticky="w")
-
-        self.product_id_var = tk.StringVar()
-        self.quantity_var = tk.StringVar(value="1")
-
-        ttk.Entry(self, textvariable=self.product_id_var, width=16).grid(row=2, column=0, padx=(0, 8))
-        ttk.Entry(self, textvariable=self.quantity_var, width=16).grid(row=2, column=1, padx=(0, 8))
-        ttk.Button(self, text="Ajouter ligne", command=self.add_line).grid(row=2, column=2, sticky="w")
-
-        self.lines = tk.Listbox(self, height=7)
-        self.lines.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=8)
-
-        pay_row = ttk.Frame(self)
-        pay_row.grid(row=4, column=0, columnspan=3, sticky="ew")
-        ttk.Label(pay_row, text="Paiement").pack(side="left")
-        self.payment_var = tk.StringVar(value="cash")
-        ttk.Combobox(pay_row, textvariable=self.payment_var, values=["cash", "carte", "mobile"], width=12).pack(
-            side="left", padx=8
-        )
-        ttk.Button(pay_row, text="Valider vente", command=self.checkout).pack(side="left")
-
-        self.items: list[dict] = []
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(3, weight=1)
- main
-
     def add_line(self) -> None:
         try:
             product_id = int(self.product_id_var.get().strip())
@@ -250,7 +167,6 @@ class PosTab(ttk.Frame):
             return
 
         self.items.append({"product_id": product_id, "quantity": quantity})
- codex/propose-complete-cash-register-system-design-ah3cit
         self.lines.insert("", "end", values=(f"Produit #{product_id}", quantity))
         self.product_id_var.set("")
         self.quantity_var.set("1")
@@ -260,12 +176,6 @@ class PosTab(ttk.Frame):
         for iid in self.lines.get_children():
             self.lines.delete(iid)
 
-
-        self.lines.insert("end", f"Produit #{product_id} x{quantity}")
-        self.product_id_var.set("")
-        self.quantity_var.set("1")
-
- main
     def checkout(self) -> None:
         try:
             sale_id = create_sale(self.cashier_id, self.items, self.payment_var.get().strip())
@@ -274,17 +184,11 @@ class PosTab(ttk.Frame):
             return
 
         messagebox.showinfo("Succès", f"Vente enregistrée ID={sale_id}")
- codex/propose-complete-cash-register-system-design-ah3cit
         self.clear_lines()
-
-        self.items.clear()
-        self.lines.delete(0, "end")
- main
 
 
 class StockTab(ttk.Frame):
     def __init__(self, master):
- codex/propose-complete-cash-register-system-design-ah3cit
         super().__init__(master, padding=12, style="App.TFrame")
 
         container = ttk.Frame(self, style="App.TFrame")
@@ -318,18 +222,6 @@ class StockTab(ttk.Frame):
 
         ttk.Label(right, text="Nouveau produit", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
 
-        super().__init__(master, padding=8)
-
-        ttk.Label(self, text="Produits", font=("Arial", 12, "bold")).grid(row=0, column=0, sticky="w")
-        ttk.Button(self, text="Rafraîchir", command=self.refresh_products).grid(row=0, column=1, sticky="e")
-
-        self.products = tk.Listbox(self, height=8)
-        self.products.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(6, 12))
-
-        add_product = ttk.LabelFrame(self, text="Nouveau produit")
-        add_product.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
- main
-
         self.p_name = tk.StringVar()
         self.p_barcode = tk.StringVar()
         self.p_cat = tk.StringVar(value="Divers")
@@ -347,7 +239,6 @@ class StockTab(ttk.Frame):
             ("TVA", self.p_tva),
             ("Stock min", self.p_min),
         ]
- codex/propose-complete-cash-register-system-design-ah3cit
         for idx, (label, var) in enumerate(fields, start=1):
             ttk.Label(right, text=label, style="Field.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
             ttk.Entry(right, textvariable=var, width=20).grid(row=idx, column=1, sticky="ew", pady=2)
@@ -359,19 +250,6 @@ class StockTab(ttk.Frame):
         ttk.Separator(right, orient="horizontal").grid(row=9, column=0, columnspan=2, sticky="ew", pady=6)
         ttk.Label(right, text="Ajouter lot", style="CardTitle.TLabel").grid(row=10, column=0, columnspan=2, sticky="w")
 
-
-        for idx, (label, var) in enumerate(fields):
-            ttk.Label(add_product, text=label).grid(row=idx, column=0, sticky="w", padx=6, pady=2)
-            ttk.Entry(add_product, textvariable=var, width=22).grid(row=idx, column=1, sticky="ew", padx=6, pady=2)
-
-        ttk.Button(add_product, text="Créer produit", command=self.create_product_ui).grid(
-            row=len(fields), column=0, columnspan=2, pady=8
-        )
-        add_product.columnconfigure(1, weight=1)
-
-        add_stock_box = ttk.LabelFrame(self, text="Ajouter lot")
-        add_stock_box.grid(row=3, column=0, columnspan=2, sticky="ew")
- main
         self.s_pid = tk.StringVar()
         self.s_batch = tk.StringVar()
         self.s_exp = tk.StringVar(value="2027-12-31")
@@ -383,7 +261,6 @@ class StockTab(ttk.Frame):
             ("Expiration", self.s_exp),
             ("Quantité", self.s_qty),
         ]
- codex/propose-complete-cash-register-system-design-ah3cit
         for idx, (label, var) in enumerate(stock_fields, start=11):
             ttk.Label(right, text=label, style="Field.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
             ttk.Entry(right, textvariable=var, width=20).grid(row=idx, column=1, sticky="ew", pady=2)
@@ -404,31 +281,6 @@ class StockTab(ttk.Frame):
                 "",
                 "end",
                 values=(p["id"], p["name"], p["stock"], f"{p['sell_price']:.2f}", p["min_stock"]),
-
-        for idx, (label, var) in enumerate(stock_fields):
-            ttk.Label(add_stock_box, text=label).grid(row=idx, column=0, sticky="w", padx=6, pady=2)
-            ttk.Entry(add_stock_box, textvariable=var, width=22).grid(row=idx, column=1, sticky="ew", padx=6, pady=2)
-
-        ttk.Button(add_stock_box, text="Ajouter stock", command=self.add_stock_ui).grid(
-            row=len(stock_fields), column=0, columnspan=2, pady=8
-        )
-        add_stock_box.columnconfigure(1, weight=1)
-
-        ttk.Button(self, text="Voir alertes stock bas", command=self.show_alerts).grid(
-            row=4, column=0, columnspan=2, pady=10
-        )
-
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1)
-        self.refresh_products()
-
-    def refresh_products(self) -> None:
-        self.products.delete(0, "end")
-        for p in list_products():
-            self.products.insert(
-                "end",
-                f"#{p['id']} {p['name']} | stock={p['stock']} | vente={p['sell_price']} | min={p['min_stock']}",
- main
             )
 
     def create_product_ui(self) -> None:
@@ -477,7 +329,6 @@ class StockTab(ttk.Frame):
 
 class ReportTab(ttk.Frame):
     def __init__(self, master):
- codex/propose-complete-cash-register-system-design-ah3cit
         super().__init__(master, padding=12, style="App.TFrame")
 
         card = ttk.Frame(self, style="Card.TFrame", padding=12)
@@ -534,48 +385,15 @@ class ReportTab(ttk.Frame):
         for row in top_products():
             self.top.insert("", "end", values=(row["name"], row["qty_vendue"], f"{row['montant']:.2f}"))
 
-        super().__init__(master, padding=8)
-        ttk.Button(self, text="Rafraîchir rapports", command=self.refresh).pack(anchor="w", pady=(0, 8))
-        self.summary = tk.Text(self, height=8, width=70)
-        self.summary.pack(fill="x")
-
-        ttk.Label(self, text="Top produits", font=("Arial", 11, "bold")).pack(anchor="w", pady=(12, 6))
-        self.top = tk.Listbox(self, height=8)
-        self.top.pack(fill="both", expand=True)
-        self.refresh()
-
-    def refresh(self) -> None:
-        self.summary.delete("1.0", "end")
-        data = daily_sales_summary()
-        self.summary.insert(
-            "end",
-            (
-                f"Nombre ventes: {data['nb_ventes']}\n"
-                f"Total HT: {data['total_ht']:.2f}\n"
-                f"Total TVA: {data['total_tva']:.2f}\n"
-                f"Total TTC: {data['total_ttc']:.2f}\n"
-            ),
-        )
-
-        self.top.delete(0, "end")
-        for row in top_products():
-            self.top.insert("end", f"{row['name']} | qté={row['qty_vendue']} | montant={row['montant']:.2f}")
- main
-
 
 class PharmacyApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Pharmacie POS - MVP")
- codex/propose-complete-cash-register-system-design-ah3cit
         self.geometry("1000x700")
         self.minsize(920, 620)
 
         configure_style(self)
-
-        self.geometry("900x650")
-
- main
         bootstrap()
         self.current = None
         self.show_login()
