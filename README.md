@@ -8,6 +8,8 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 - Interface de connexion.
 - Interface caisse (ajout de lignes + validation de vente).
 - Interface stock (création produit, ajout de lot, listing stock).
+- Gestion des rôles: admin / caissier / pharmacien.
+- Onglet admin pour créer des utilisateurs.
 - Vente avec décrémentation FIFO du stock.
 - Rapport du jour (total HT/TVA/TTC) et top produits.
 - Alerte de stock bas.

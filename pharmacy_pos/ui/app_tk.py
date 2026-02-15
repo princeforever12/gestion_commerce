@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from pharmacy_pos.services.auth_service import User, authenticate
+from pharmacy_pos.services.auth_service import User, authenticate, create_user, list_users
 from pharmacy_pos.services.bootstrap_service import bootstrap
 from pharmacy_pos.services.product_service import create_product, list_products
 from pharmacy_pos.services.report_service import daily_sales_summary, top_products
@@ -111,8 +111,11 @@ class DashboardFrame(ttk.Frame):
         notebook.pack(fill="both", expand=True, pady=(12, 0))
 
         notebook.add(PosTab(notebook, user.id), text="Caisse")
-        notebook.add(StockTab(notebook), text="Stock")
+        notebook.add(StockTab(notebook, user.role), text="Stock")
         notebook.add(ReportTab(notebook), text="Rapports")
+
+        if user.role == "admin":
+            notebook.add(UserAdminTab(notebook), text="Utilisateurs")
 
 
 class PosTab(ttk.Frame):
@@ -188,8 +191,10 @@ class PosTab(ttk.Frame):
 
 
 class StockTab(ttk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, role: str):
         super().__init__(master, padding=12, style="App.TFrame")
+        self.role = role
+        self.can_manage = role == "admin"
 
         container = ttk.Frame(self, style="App.TFrame")
         container.pack(fill="both", expand=True)
@@ -241,11 +246,13 @@ class StockTab(ttk.Frame):
         ]
         for idx, (label, var) in enumerate(fields, start=1):
             ttk.Label(right, text=label, style="Field.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
-            ttk.Entry(right, textvariable=var, width=20).grid(row=idx, column=1, sticky="ew", pady=2)
+            entry = ttk.Entry(right, textvariable=var, width=20)
+            entry.grid(row=idx, column=1, sticky="ew", pady=2)
+            if not self.can_manage:
+                entry.state(["disabled"])
 
-        ttk.Button(right, text="Créer produit", style="Primary.TButton", command=self.create_product_ui).grid(
-            row=8, column=0, columnspan=2, sticky="ew", pady=(8, 12)
-        )
+        create_btn = ttk.Button(right, text="Créer produit", style="Primary.TButton", command=self.create_product_ui)
+        create_btn.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(8, 12))
 
         ttk.Separator(right, orient="horizontal").grid(row=9, column=0, columnspan=2, sticky="ew", pady=6)
         ttk.Label(right, text="Ajouter lot", style="CardTitle.TLabel").grid(row=10, column=0, columnspan=2, sticky="w")
@@ -263,11 +270,22 @@ class StockTab(ttk.Frame):
         ]
         for idx, (label, var) in enumerate(stock_fields, start=11):
             ttk.Label(right, text=label, style="Field.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
-            ttk.Entry(right, textvariable=var, width=20).grid(row=idx, column=1, sticky="ew", pady=2)
+            entry = ttk.Entry(right, textvariable=var, width=20)
+            entry.grid(row=idx, column=1, sticky="ew", pady=2)
+            if not self.can_manage:
+                entry.state(["disabled"])
 
-        ttk.Button(right, text="Ajouter stock", style="Secondary.TButton", command=self.add_stock_ui).grid(
-            row=15, column=0, columnspan=2, sticky="ew", pady=(8, 0)
-        )
+        add_btn = ttk.Button(right, text="Ajouter stock", style="Secondary.TButton", command=self.add_stock_ui)
+        add_btn.grid(row=15, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
+        if not self.can_manage:
+            create_btn.state(["disabled"])
+            add_btn.state(["disabled"])
+            ttk.Label(
+                right,
+                text="Mode lecture seule pour ce rôle (admin requis).",
+                style="Subtitle.TLabel",
+            ).grid(row=16, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         right.columnconfigure(1, weight=1)
         self.refresh_products()
@@ -284,6 +302,9 @@ class StockTab(ttk.Frame):
             )
 
     def create_product_ui(self) -> None:
+        if not self.can_manage:
+            messagebox.showwarning("Accès refusé", "Seul un admin peut créer des produits")
+            return
         try:
             pid = create_product(
                 name=self.p_name.get().strip(),
@@ -303,6 +324,9 @@ class StockTab(ttk.Frame):
         self.refresh_products()
 
     def add_stock_ui(self) -> None:
+        if not self.can_manage:
+            messagebox.showwarning("Accès refusé", "Seul un admin peut ajouter du stock")
+            return
         try:
             batch_id = add_stock(
                 product_id=int(self.s_pid.get().strip()),
@@ -323,8 +347,81 @@ class StockTab(ttk.Frame):
             messagebox.showinfo("Alertes", "Aucune alerte de stock bas")
             return
 
-        message = "\n".join([f"- {a['name']}: {a['stock']} (min={a['min_stock']})" for a in alerts])
+        message = "
+".join([f"- {a['name']}: {a['stock']} (min={a['min_stock']})" for a in alerts])
         messagebox.showwarning("Stock bas", message)
+
+
+class UserAdminTab(ttk.Frame):
+    def __init__(self, master):
+        super().__init__(master, padding=12, style="App.TFrame")
+
+        card = ttk.Frame(self, style="Card.TFrame", padding=12)
+        card.pack(fill="both", expand=True)
+
+        ttk.Label(card, text="Gestion des utilisateurs", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+
+        self.u_name = tk.StringVar()
+        self.u_pass = tk.StringVar()
+        self.u_role = tk.StringVar(value="caissier")
+
+        ttk.Label(card, text="Nom utilisateur", style="Field.TLabel").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Entry(card, textvariable=self.u_name).grid(row=1, column=1, sticky="ew", pady=2)
+
+        ttk.Label(card, text="Mot de passe", style="Field.TLabel").grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Entry(card, textvariable=self.u_pass, show="*").grid(row=2, column=1, sticky="ew", pady=2)
+
+        ttk.Label(card, text="Rôle", style="Field.TLabel").grid(row=3, column=0, sticky="w", pady=2)
+        ttk.Combobox(card, textvariable=self.u_role, values=["admin", "caissier", "pharmacien"], state="readonly").grid(
+            row=3, column=1, sticky="ew", pady=2
+        )
+
+        ttk.Button(card, text="Créer utilisateur", style="Primary.TButton", command=self.create_user_ui).grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=(8, 10)
+        )
+
+        self.users = ttk.Treeview(card, columns=("id", "username", "role", "created"), show="headings", height=12)
+        self.users.heading("id", text="ID")
+        self.users.heading("username", text="Utilisateur")
+        self.users.heading("role", text="Rôle")
+        self.users.heading("created", text="Créé le")
+        self.users.column("id", width=60, anchor="center")
+        self.users.column("username", width=180, anchor="w")
+        self.users.column("role", width=100, anchor="center")
+        self.users.column("created", width=180, anchor="center")
+        self.users.grid(row=5, column=0, columnspan=2, sticky="nsew")
+
+        ttk.Button(card, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_users).grid(
+            row=6, column=1, sticky="e", pady=(8, 0)
+        )
+
+        card.columnconfigure(1, weight=1)
+        card.rowconfigure(5, weight=1)
+        self.refresh_users()
+
+    def create_user_ui(self) -> None:
+        try:
+            uid = create_user(self.u_name.get(), self.u_pass.get(), self.u_role.get())
+        except Exception as exc:
+            messagebox.showerror("Erreur utilisateur", str(exc))
+            return
+
+        messagebox.showinfo("Succès", f"Utilisateur créé ID={uid}")
+        self.u_name.set("")
+        self.u_pass.set("")
+        self.u_role.set("caissier")
+        self.refresh_users()
+
+    def refresh_users(self) -> None:
+        for iid in self.users.get_children():
+            self.users.delete(iid)
+
+        for user in list_users():
+            self.users.insert(
+                "",
+                "end",
+                values=(user["id"], user["username"], user["role"], user["created_at"]),
+            )
 
 
 class ReportTab(ttk.Frame):
