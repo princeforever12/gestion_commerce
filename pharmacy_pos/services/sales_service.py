@@ -77,3 +77,36 @@ def create_sale(cashier_id: int, items: list[dict], payment_method: str) -> int:
                 )
 
         return sale_id
+
+
+def list_sales(limit: int = 100) -> list[dict]:
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id, u.username AS cashier, s.total_ttc, s.payment_method, s.created_at
+            FROM sales s
+            JOIN users u ON u.id = s.cashier_id
+            ORDER BY s.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_sale_items(sale_id: int) -> list[dict]:
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT p.name AS product_name, si.quantity, si.unit_price, si.line_total, b.batch_number
+            FROM sale_items si
+            JOIN products p ON p.id = si.product_id
+            JOIN batches b ON b.id = si.batch_id
+            WHERE si.sale_id = ?
+            ORDER BY si.id ASC
+            """,
+            (sale_id,),
+        )
+        rows = cur.fetchall()
+    return [dict(row) for row in rows]

@@ -5,7 +5,7 @@ from pharmacy_pos.services.auth_service import User, authenticate, create_user, 
 from pharmacy_pos.services.bootstrap_service import bootstrap
 from pharmacy_pos.services.product_service import create_product, list_products
 from pharmacy_pos.services.report_service import daily_sales_summary, top_products
-from pharmacy_pos.services.sales_service import create_sale
+from pharmacy_pos.services.sales_service import create_sale, get_sale_items, list_sales
 from pharmacy_pos.services.stock_service import add_stock, get_expiring_batches, get_low_stock_products
 
 
@@ -113,6 +113,7 @@ class DashboardFrame(ttk.Frame):
         notebook.add(PosTab(notebook, user.id), text="Caisse")
         notebook.add(StockTab(notebook, user.role), text="Stock")
         notebook.add(ReportTab(notebook), text="Rapports")
+        notebook.add(SalesHistoryTab(notebook), text="Historique")
 
         if user.role == "admin":
             notebook.add(UserAdminTab(notebook), text="Utilisateurs")
@@ -367,6 +368,88 @@ class StockTab(ttk.Frame):
 
         message = "\n".join([f"- {a['name']}: {a['stock']} (min={a['min_stock']})" for a in alerts])
         messagebox.showwarning("Stock bas", message)
+
+
+class SalesHistoryTab(ttk.Frame):
+    def __init__(self, master):
+        super().__init__(master, padding=12, style="App.TFrame")
+
+        card = ttk.Frame(self, style="Card.TFrame", padding=12)
+        card.pack(fill="both", expand=True)
+
+        top = ttk.Frame(card, style="Card.TFrame")
+        top.pack(fill="x")
+        ttk.Label(top, text="Historique des ventes", style="CardTitle.TLabel").pack(side="left")
+        ttk.Button(top, text="Rafraîchir", style="Secondary.TButton", command=self.refresh).pack(side="right")
+
+        self.sales = ttk.Treeview(card, columns=("id", "cashier", "total", "payment", "date"), show="headings", height=10)
+        for col, title, width in [
+            ("id", "ID", 70),
+            ("cashier", "Caissier", 140),
+            ("total", "Total TTC", 100),
+            ("payment", "Paiement", 110),
+            ("date", "Date", 180),
+        ]:
+            self.sales.heading(col, text=title)
+            self.sales.column(col, width=width, anchor="center" if col != "cashier" else "w")
+        self.sales.pack(fill="x", pady=(8, 10))
+        self.sales.bind("<<TreeviewSelect>>", self.on_select_sale)
+
+        ttk.Label(card, text="Détail de la vente sélectionnée", style="CardTitle.TLabel").pack(anchor="w", pady=(4, 6))
+        self.items = ttk.Treeview(card, columns=("product", "qty", "unit", "line", "batch"), show="headings", height=9)
+        self.items.heading("product", text="Produit")
+        self.items.heading("qty", text="Qté")
+        self.items.heading("unit", text="Prix U.")
+        self.items.heading("line", text="Total ligne")
+        self.items.heading("batch", text="Lot")
+        self.items.column("product", width=220, anchor="w")
+        self.items.column("qty", width=70, anchor="center")
+        self.items.column("unit", width=90, anchor="e")
+        self.items.column("line", width=110, anchor="e")
+        self.items.column("batch", width=120, anchor="center")
+        self.items.pack(fill="both", expand=True)
+
+        self.refresh()
+
+    def refresh(self) -> None:
+        for iid in self.sales.get_children():
+            self.sales.delete(iid)
+        for row in list_sales(200):
+            self.sales.insert(
+                "",
+                "end",
+                values=(row["id"], row["cashier"], f"{row['total_ttc']:.2f}", row["payment_method"], row["created_at"]),
+            )
+
+        for iid in self.items.get_children():
+            self.items.delete(iid)
+
+    def on_select_sale(self, _event=None) -> None:
+        selected = self.sales.selection()
+        if not selected:
+            return
+        values = self.sales.item(selected[0], "values")
+        if not values:
+            return
+
+        sale_id = int(values[0])
+        rows = get_sale_items(sale_id)
+
+        for iid in self.items.get_children():
+            self.items.delete(iid)
+
+        for row in rows:
+            self.items.insert(
+                "",
+                "end",
+                values=(
+                    row["product_name"],
+                    row["quantity"],
+                    f"{row['unit_price']:.2f}",
+                    f"{row['line_total']:.2f}",
+                    row["batch_number"],
+                ),
+            )
 
 
 class UserAdminTab(ttk.Frame):
