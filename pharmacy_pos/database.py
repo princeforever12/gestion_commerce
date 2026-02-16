@@ -98,5 +98,22 @@ def init_db() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(product_id) REFERENCES products(id)
             );
+
+            CREATE TABLE IF NOT EXISTS sale_cancellations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_id INTEGER UNIQUE NOT NULL,
+                reason TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(sale_id) REFERENCES sales(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS returns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_item_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL CHECK (quantity > 0),
+                reason TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(sale_item_id) REFERENCES sale_items(id) ON DELETE CASCADE
+            );
             """
         )

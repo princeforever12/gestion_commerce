@@ -1,12 +1,20 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pharmacy_pos.services.auth_service import User, authenticate, create_user, list_users
 from pharmacy_pos.services.bootstrap_service import bootstrap
-from pharmacy_pos.services.product_service import create_product, list_products
+from pharmacy_pos.services.product_service import create_product, list_products, search_products
 from pharmacy_pos.services.report_service import daily_sales_summary, top_products
-from pharmacy_pos.services.sales_service import create_sale, get_sale_items, list_sales
+from pharmacy_pos.services.sales_service import (
+    cancel_sale,
+    create_sale,
+    get_sale_items,
+    list_sales,
+    return_sale_item,
+)
 from pharmacy_pos.services.stock_service import add_stock, get_expiring_batches, get_low_stock_products
+from pharmacy_pos.utils.report_export import export_reports_csv
+from pharmacy_pos.utils.ticket_export import export_ticket_text
 
 
 class Palette:
@@ -16,6 +24,8 @@ class Palette:
     PRIMARY_DARK = "#1e40af"
     TEXT = "#0f172a"
     MUTED = "#64748b"
+    SOFT_BLUE = "#e0e7ff"
+    SOFT_GRAY = "#f8fafc"
 
 
 def configure_style(root: tk.Tk) -> None:
@@ -46,8 +56,19 @@ def configure_style(root: tk.Tk) -> None:
     style.configure("TNotebook", background=Palette.BG, borderwidth=0)
     style.configure("TNotebook.Tab", padding=(14, 8), font=("Segoe UI", 10, "bold"))
 
-    style.configure("Treeview", rowheight=28, font=("Segoe UI", 9))
+    style.configure("Treeview", rowheight=28, font=("Segoe UI", 9), background="#ffffff", fieldbackground="#ffffff")
     style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
+    style.configure("Status.TLabel", background=Palette.BG, foreground=Palette.MUTED, font=("Segoe UI", 9))
+
+
+def configure_tree_rows(tree: ttk.Treeview) -> None:
+    tree.tag_configure("even", background=Palette.SOFT_GRAY)
+    tree.tag_configure("odd", background=Palette.SOFT_BLUE)
+
+
+def append_tree_row(tree: ttk.Treeview, values: tuple) -> None:
+    tag = "even" if len(tree.get_children()) % 2 == 0 else "odd"
+    tree.insert("", "end", values=values, tags=(tag,))
 
 
 class LoginFrame(ttk.Frame):
@@ -118,6 +139,12 @@ class DashboardFrame(ttk.Frame):
         if user.role == "admin":
             notebook.add(UserAdminTab(notebook), text="Utilisateurs")
 
+        ttk.Label(
+            self,
+            text="Astuce: Double-cliquez/selectionnez les lignes pour accélérer les actions (historique, recherche, stock).",
+            style="Status.TLabel",
+        ).pack(side="bottom", anchor="w", pady=(8, 0))
+
 
 class PosTab(ttk.Frame):
     def __init__(self, master, cashier_id: int):
@@ -132,33 +159,61 @@ class PosTab(ttk.Frame):
         ttk.Label(card, text="ID produit", style="Field.TLabel").grid(row=1, column=0, sticky="w")
         ttk.Label(card, text="Quantité", style="Field.TLabel").grid(row=1, column=1, sticky="w")
         ttk.Label(card, text="Paiement", style="Field.TLabel").grid(row=1, column=2, sticky="w")
+        ttk.Label(card, text="Recherche produit", style="Field.TLabel").grid(row=0, column=4, sticky="w")
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self.on_search_change)
+
+        self.search_results = ttk.Treeview(card, columns=("id", "name", "barcode", "price", "rx"), show="headings", height=5)
+        self.search_results.heading("id", text="ID")
+        self.search_results.heading("name", text="Nom")
+        self.search_results.heading("barcode", text="Barcode")
+        self.search_results.heading("price", text="Prix")
+        self.search_results.heading("rx", text="Ord")
+        self.search_results.column("id", width=50, anchor="center")
+        self.search_results.column("name", width=180, anchor="w")
+        self.search_results.column("barcode", width=110, anchor="center")
+        self.search_results.column("price", width=80, anchor="e")
+        self.search_results.column("rx", width=55, anchor="center")
+        self.search_results.bind("<<TreeviewSelect>>", self.on_pick_search_result)
+        configure_tree_rows(self.search_results)
 
         self.product_id_var = tk.StringVar()
         self.quantity_var = tk.StringVar(value="1")
         self.payment_var = tk.StringVar(value="cash")
+        self.prescription_ok = tk.BooleanVar(value=False)
 
         ttk.Entry(card, textvariable=self.product_id_var, width=18).grid(row=2, column=0, padx=(0, 8), pady=(2, 8))
         ttk.Entry(card, textvariable=self.quantity_var, width=18).grid(row=2, column=1, padx=(0, 8), pady=(2, 8))
         ttk.Combobox(card, textvariable=self.payment_var, values=["cash", "carte", "mobile"], width=14, state="readonly").grid(
             row=2, column=2, padx=(0, 8), pady=(2, 8)
         )
-        ttk.Button(card, text="Ajouter ligne", style="Secondary.TButton", command=self.add_line).grid(row=2, column=3, sticky="w")
+        ttk.Checkbutton(card, variable=self.prescription_ok, text="Vérifiée").grid(row=2, column=3, sticky="w")
+        ttk.Button(card, text="Ajouter ligne", style="Secondary.TButton", command=self.add_line).grid(row=2, column=4, sticky="w")
 
-        self.lines = ttk.Treeview(card, columns=("product", "qty"), show="headings", height=10)
+        ttk.Entry(card, textvariable=self.search_var, width=30).grid(row=1, column=4, sticky="ew", padx=(8, 0))
+        self.search_results.grid(row=2, column=5, rowspan=2, sticky="nsew", padx=(8, 0))
+
+        self.lines = ttk.Treeview(card, columns=("product", "qty", "rx"), show="headings", height=10)
         self.lines.heading("product", text="Produit")
         self.lines.heading("qty", text="Quantité")
+        self.lines.heading("rx", text="Ordonnance")
         self.lines.column("product", width=240)
         self.lines.column("qty", width=100, anchor="center")
-        self.lines.grid(row=3, column=0, columnspan=4, sticky="nsew", pady=8)
+        self.lines.column("rx", width=120, anchor="center")
+        self.lines.grid(row=4, column=0, columnspan=6, sticky="nsew", pady=8)
+        configure_tree_rows(self.lines)
 
         actions = ttk.Frame(card, style="Card.TFrame")
-        actions.grid(row=4, column=0, columnspan=4, sticky="e")
+        actions.grid(row=5, column=0, columnspan=6, sticky="e")
         ttk.Button(actions, text="Vider", style="Secondary.TButton", command=self.clear_lines).pack(side="right", padx=6)
         ttk.Button(actions, text="Valider vente", style="Primary.TButton", command=self.checkout).pack(side="right")
 
         self.items: list[dict] = []
-        card.columnconfigure(0, weight=1)
-        card.rowconfigure(3, weight=1)
+        card.columnconfigure(4, weight=1)
+        card.columnconfigure(5, weight=1)
+        card.rowconfigure(4, weight=1)
+        self.refresh_search_results()
 
     def add_line(self) -> None:
         try:
@@ -170,10 +225,39 @@ class PosTab(ttk.Frame):
             messagebox.showerror("Erreur", "ID produit et quantité invalides")
             return
 
-        self.items.append({"product_id": product_id, "quantity": quantity})
-        self.lines.insert("", "end", values=(f"Produit #{product_id}", quantity))
+        rx_ok = bool(self.prescription_ok.get())
+        self.items.append({"product_id": product_id, "quantity": quantity, "prescription_ok": rx_ok})
+        append_tree_row(self.lines, (f"Produit #{product_id}", quantity, "Oui" if rx_ok else "Non"))
         self.product_id_var.set("")
         self.quantity_var.set("1")
+        self.prescription_ok.set(False)
+
+    def on_search_change(self, *_args) -> None:
+        self.refresh_search_results()
+
+    def refresh_search_results(self) -> None:
+        for iid in self.search_results.get_children():
+            self.search_results.delete(iid)
+        for row in search_products(self.search_var.get(), 20):
+            append_tree_row(
+                self.search_results,
+                (
+                    row["id"],
+                    row["name"],
+                    row["barcode"] or "",
+                    f"{row['sell_price']:.2f}",
+                    "Oui" if row["requires_prescription"] else "Non",
+                ),
+            )
+
+    def on_pick_search_result(self, _event=None) -> None:
+        selected = self.search_results.selection()
+        if not selected:
+            return
+        values = self.search_results.item(selected[0], "values")
+        if not values:
+            return
+        self.product_id_var.set(str(values[0]))
 
     def clear_lines(self) -> None:
         self.items.clear()
@@ -223,6 +307,7 @@ class StockTab(ttk.Frame):
             self.products.heading(col, text=txt)
             self.products.column(col, width=w, anchor="center" if col != "name" else "w")
         self.products.pack(fill="both", expand=True, pady=(0, 8))
+        configure_tree_rows(self.products)
 
         actions_left = ttk.Frame(left, style="Card.TFrame")
         actions_left.pack(anchor="e")
@@ -238,6 +323,7 @@ class StockTab(ttk.Frame):
         self.p_sell = tk.StringVar(value="0")
         self.p_tva = tk.StringVar(value="0")
         self.p_min = tk.StringVar(value="0")
+        self.p_rx = tk.BooleanVar(value=False)
 
         fields = [
             ("Nom", self.p_name),
@@ -255,11 +341,14 @@ class StockTab(ttk.Frame):
             if not self.can_manage:
                 entry.state(["disabled"])
 
-        create_btn = ttk.Button(right, text="Créer produit", style="Primary.TButton", command=self.create_product_ui)
-        create_btn.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(8, 12))
+        rx_chk = ttk.Checkbutton(right, text="Ordonnance requise", variable=self.p_rx)
+        rx_chk.grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 2))
 
-        ttk.Separator(right, orient="horizontal").grid(row=9, column=0, columnspan=2, sticky="ew", pady=6)
-        ttk.Label(right, text="Ajouter lot", style="CardTitle.TLabel").grid(row=10, column=0, columnspan=2, sticky="w")
+        create_btn = ttk.Button(right, text="Créer produit", style="Primary.TButton", command=self.create_product_ui)
+        create_btn.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(6, 12))
+
+        ttk.Separator(right, orient="horizontal").grid(row=10, column=0, columnspan=2, sticky="ew", pady=6)
+        ttk.Label(right, text="Ajouter lot", style="CardTitle.TLabel").grid(row=11, column=0, columnspan=2, sticky="w")
 
         self.s_pid = tk.StringVar()
         self.s_batch = tk.StringVar()
@@ -272,7 +361,7 @@ class StockTab(ttk.Frame):
             ("Expiration", self.s_exp),
             ("Quantité", self.s_qty),
         ]
-        for idx, (label, var) in enumerate(stock_fields, start=11):
+        for idx, (label, var) in enumerate(stock_fields, start=12):
             ttk.Label(right, text=label, style="Field.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
             entry = ttk.Entry(right, textvariable=var, width=20)
             entry.grid(row=idx, column=1, sticky="ew", pady=2)
@@ -280,16 +369,17 @@ class StockTab(ttk.Frame):
                 entry.state(["disabled"])
 
         add_btn = ttk.Button(right, text="Ajouter stock", style="Secondary.TButton", command=self.add_stock_ui)
-        add_btn.grid(row=15, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        add_btn.grid(row=16, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         if not self.can_manage:
             create_btn.state(["disabled"])
             add_btn.state(["disabled"])
+            rx_chk.state(["disabled"])
             ttk.Label(
                 right,
                 text="Mode lecture seule pour ce rôle (admin requis).",
                 style="Subtitle.TLabel",
-            ).grid(row=16, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            ).grid(row=17, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         right.columnconfigure(1, weight=1)
         self.refresh_products()
@@ -299,10 +389,9 @@ class StockTab(ttk.Frame):
             self.products.delete(iid)
 
         for p in list_products():
-            self.products.insert(
-                "",
-                "end",
-                values=(p["id"], p["name"], p["stock"], f"{p['sell_price']:.2f}", p["min_stock"]),
+            append_tree_row(
+                self.products,
+                (p["id"], p["name"], p["stock"], f"{p['sell_price']:.2f}", p["min_stock"]),
             )
 
     def create_product_ui(self) -> None:
@@ -318,7 +407,7 @@ class StockTab(ttk.Frame):
                 sell_price=float(self.p_sell.get().strip()),
                 tva=float(self.p_tva.get().strip()),
                 min_stock=int(self.p_min.get().strip()),
-                requires_prescription=False,
+                requires_prescription=bool(self.p_rx.get()),
             )
         except Exception as exc:
             messagebox.showerror("Erreur produit", str(exc))
@@ -380,49 +469,148 @@ class SalesHistoryTab(ttk.Frame):
         top = ttk.Frame(card, style="Card.TFrame")
         top.pack(fill="x")
         ttk.Label(top, text="Historique des ventes", style="CardTitle.TLabel").pack(side="left")
+        ttk.Button(top, text="Retour ligne", style="Secondary.TButton", command=self.return_selected_item).pack(side="right", padx=(0, 6))
+        ttk.Button(top, text="Annuler ticket", style="Secondary.TButton", command=self.cancel_selected_sale).pack(side="right", padx=(0, 6))
+        ttk.Button(top, text="Exporter ticket", style="Secondary.TButton", command=self.export_selected_ticket).pack(side="right", padx=(0, 6))
         ttk.Button(top, text="Rafraîchir", style="Secondary.TButton", command=self.refresh).pack(side="right")
 
-        self.sales = ttk.Treeview(card, columns=("id", "cashier", "total", "payment", "date"), show="headings", height=10)
+        self.sales = ttk.Treeview(card, columns=("id", "cashier", "total", "payment", "date", "status"), show="headings", height=10)
         for col, title, width in [
             ("id", "ID", 70),
             ("cashier", "Caissier", 140),
             ("total", "Total TTC", 100),
             ("payment", "Paiement", 110),
             ("date", "Date", 180),
+            ("status", "Statut", 100),
         ]:
             self.sales.heading(col, text=title)
             self.sales.column(col, width=width, anchor="center" if col != "cashier" else "w")
         self.sales.pack(fill="x", pady=(8, 10))
         self.sales.bind("<<TreeviewSelect>>", self.on_select_sale)
+        configure_tree_rows(self.sales)
 
         ttk.Label(card, text="Détail de la vente sélectionnée", style="CardTitle.TLabel").pack(anchor="w", pady=(4, 6))
-        self.items = ttk.Treeview(card, columns=("product", "qty", "unit", "line", "batch"), show="headings", height=9)
+        self.items = ttk.Treeview(card, columns=("product", "qty", "unit", "line", "batch", "sid"), show="headings", height=9)
         self.items.heading("product", text="Produit")
         self.items.heading("qty", text="Qté")
         self.items.heading("unit", text="Prix U.")
         self.items.heading("line", text="Total ligne")
         self.items.heading("batch", text="Lot")
+        self.items.heading("sid", text="sale_item_id")
         self.items.column("product", width=220, anchor="w")
         self.items.column("qty", width=70, anchor="center")
         self.items.column("unit", width=90, anchor="e")
         self.items.column("line", width=110, anchor="e")
         self.items.column("batch", width=120, anchor="center")
+        self.items.column("sid", width=0, stretch=False)
         self.items.pack(fill="both", expand=True)
+        configure_tree_rows(self.items)
 
         self.refresh()
+
+    def export_csv_reports(self) -> None:
+        directory = filedialog.askdirectory(title="Choisir dossier d'export CSV")
+        if not directory:
+            return
+
+        try:
+            files = export_reports_csv(directory)
+        except Exception as exc:
+            messagebox.showerror("Export CSV", str(exc))
+            return
+
+        messagebox.showinfo("Export CSV", "Fichiers générés:\n- " + "\n- ".join(files))
 
     def refresh(self) -> None:
         for iid in self.sales.get_children():
             self.sales.delete(iid)
         for row in list_sales(200):
-            self.sales.insert(
-                "",
-                "end",
-                values=(row["id"], row["cashier"], f"{row['total_ttc']:.2f}", row["payment_method"], row["created_at"]),
+            append_tree_row(
+                self.sales,
+                (row["id"], row["cashier"], f"{row['total_ttc']:.2f}", row["payment_method"], row["created_at"], "Annulée" if row["canceled"] else "Active"),
             )
 
         for iid in self.items.get_children():
             self.items.delete(iid)
+
+    def export_selected_ticket(self) -> None:
+        selected = self.sales.selection()
+        if not selected:
+            messagebox.showwarning("Export", "Sélectionne une vente d'abord")
+            return
+
+        values = self.sales.item(selected[0], "values")
+        sale_id = int(values[0])
+
+        filename = filedialog.asksaveasfilename(
+            title="Exporter ticket",
+            defaultextension=".txt",
+            filetypes=[("Fichier texte", "*.txt")],
+            initialfile=f"ticket_{sale_id}.txt",
+        )
+        if not filename:
+            return
+
+        path = export_ticket_text(sale_id, filename)
+        messagebox.showinfo("Export", f"Ticket exporté: {path}")
+
+    def cancel_selected_sale(self) -> None:
+        selected = self.sales.selection()
+        if not selected:
+            messagebox.showwarning("Annulation", "Sélectionne une vente")
+            return
+
+        values = self.sales.item(selected[0], "values")
+        sale_id = int(values[0])
+        if len(values) >= 6 and values[5] == "Annulée":
+            messagebox.showinfo("Annulation", "Cette vente est déjà annulée")
+            return
+
+        reason = simpledialog.askstring("Annulation ticket", "Motif d'annulation:", initialvalue="Erreur caisse")
+        if reason is None:
+            return
+
+        try:
+            cancel_sale(sale_id, reason)
+        except Exception as exc:
+            messagebox.showerror("Annulation impossible", str(exc))
+            return
+
+        messagebox.showinfo("Succès", f"Vente #{sale_id} annulée")
+        self.refresh()
+
+    def return_selected_item(self) -> None:
+        selected_sale = self.sales.selection()
+        selected_item = self.items.selection()
+        if not selected_sale or not selected_item:
+            messagebox.showwarning("Retour", "Sélectionne une vente puis une ligne de ticket")
+            return
+
+        sale_values = self.sales.item(selected_sale[0], "values")
+        if len(sale_values) >= 6 and sale_values[5] == "Annulée":
+            messagebox.showwarning("Retour", "Retour impossible: ticket annulé")
+            return
+
+        item_values = self.items.item(selected_item[0], "values")
+        sale_item_id = int(item_values[5])
+        qty_max = int(item_values[1])
+        qty = simpledialog.askinteger("Retour", f"Quantité à retourner (max {qty_max})", minvalue=1, maxvalue=qty_max)
+        if qty is None:
+            return
+
+        reason = simpledialog.askstring("Retour", "Motif du retour:", initialvalue="Retour client")
+        if reason is None:
+            return
+
+        try:
+            return_sale_item(sale_item_id, qty, reason)
+        except Exception as exc:
+            messagebox.showerror("Retour impossible", str(exc))
+            return
+
+        messagebox.showinfo("Succès", f"Retour enregistré pour la ligne #{sale_item_id}")
+        self.on_select_sale()
+        self.refresh()
 
     def on_select_sale(self, _event=None) -> None:
         selected = self.sales.selection()
@@ -439,15 +627,15 @@ class SalesHistoryTab(ttk.Frame):
             self.items.delete(iid)
 
         for row in rows:
-            self.items.insert(
-                "",
-                "end",
-                values=(
+            append_tree_row(
+                self.items,
+                (
                     row["product_name"],
                     row["quantity"],
                     f"{row['unit_price']:.2f}",
                     f"{row['line_total']:.2f}",
                     row["batch_number"],
+                    row["sale_item_id"],
                 ),
             )
 
@@ -490,6 +678,7 @@ class UserAdminTab(ttk.Frame):
         self.users.column("role", width=100, anchor="center")
         self.users.column("created", width=180, anchor="center")
         self.users.grid(row=5, column=0, columnspan=2, sticky="nsew")
+        configure_tree_rows(self.users)
 
         ttk.Button(card, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_users).grid(
             row=6, column=1, sticky="e", pady=(8, 0)
@@ -517,10 +706,9 @@ class UserAdminTab(ttk.Frame):
             self.users.delete(iid)
 
         for user in list_users():
-            self.users.insert(
-                "",
-                "end",
-                values=(user["id"], user["username"], user["role"], user["created_at"]),
+            append_tree_row(
+                self.users,
+                (user["id"], user["username"], user["role"], user["created_at"]),
             )
 
 
@@ -534,6 +722,7 @@ class ReportTab(ttk.Frame):
         top_bar = ttk.Frame(card, style="Card.TFrame")
         top_bar.pack(fill="x")
         ttk.Label(top_bar, text="Rapports du jour", style="CardTitle.TLabel").pack(side="left")
+        ttk.Button(top_bar, text="Exporter CSV", style="Secondary.TButton", command=self.export_csv_reports).pack(side="right", padx=(0, 6))
         ttk.Button(top_bar, text="Rafraîchir", style="Primary.TButton", command=self.refresh).pack(side="right")
 
         metrics = ttk.Frame(card, style="Card.TFrame")
@@ -567,8 +756,22 @@ class ReportTab(ttk.Frame):
         self.top.column("qty", width=90, anchor="center")
         self.top.column("amount", width=130, anchor="e")
         self.top.pack(fill="both", expand=True)
+        configure_tree_rows(self.top)
 
         self.refresh()
+
+    def export_csv_reports(self) -> None:
+        directory = filedialog.askdirectory(title="Choisir dossier d'export CSV")
+        if not directory:
+            return
+
+        try:
+            files = export_reports_csv(directory)
+        except Exception as exc:
+            messagebox.showerror("Export CSV", str(exc))
+            return
+
+        messagebox.showinfo("Export CSV", "Fichiers générés:\n- " + "\n- ".join(files))
 
     def refresh(self) -> None:
         data = daily_sales_summary()
@@ -580,7 +783,7 @@ class ReportTab(ttk.Frame):
         for iid in self.top.get_children():
             self.top.delete(iid)
         for row in top_products():
-            self.top.insert("", "end", values=(row["name"], row["qty_vendue"], f"{row['montant']:.2f}"))
+            append_tree_row(self.top, (row["name"], row["qty_vendue"], f"{row['montant']:.2f}"))
 
 
 class PharmacyApp(tk.Tk):

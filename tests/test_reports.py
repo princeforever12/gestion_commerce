@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 
 from pharmacy_pos.config import DB_PATH
@@ -8,6 +9,7 @@ from pharmacy_pos.services.product_service import create_product
 from pharmacy_pos.services.report_service import daily_sales_summary
 from pharmacy_pos.services.sales_service import create_sale
 from pharmacy_pos.services.stock_service import add_stock
+from pharmacy_pos.utils.report_export import export_reports_csv
 
 
 class ReportTest(unittest.TestCase):
@@ -28,6 +30,18 @@ class ReportTest(unittest.TestCase):
         self.assertAlmostEqual(summary["total_ht"], 40)
         self.assertAlmostEqual(summary["total_tva"], 4)
         self.assertAlmostEqual(summary["total_ttc"], 44)
+
+    def test_export_reports_csv(self) -> None:
+        product_id = create_product("Sirop", "S111", "Divers", 3, 7, 0, 2, False)
+        add_stock(product_id, "S-LOT", "2029-01-01", 20)
+        create_sale(1, [{"product_id": product_id, "quantity": 3}], "cash")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            files = export_reports_csv(tmp)
+
+            self.assertGreaterEqual(len(files), 5)
+            for path in files:
+                self.assertTrue(os.path.exists(path))
 
 
 if __name__ == "__main__":

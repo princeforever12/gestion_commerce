@@ -47,6 +47,7 @@ def list_products() -> list[dict]:
             """
             SELECT p.id, p.name, p.barcode, c.name AS category,
                    p.buy_price, p.sell_price, p.tva, p.min_stock,
+                   p.requires_prescription,
                    COALESCE(SUM(b.quantity), 0) AS stock
             FROM products p
             LEFT JOIN categories c ON c.id = p.category_id
@@ -55,5 +56,34 @@ def list_products() -> list[dict]:
             ORDER BY p.name ASC
             """
         )
+        rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
+def search_products(term: str, limit: int = 30) -> list[dict]:
+    clean = term.strip()
+    with db_cursor() as cur:
+        if not clean:
+            cur.execute(
+                """
+                SELECT id, name, barcode, sell_price, requires_prescription
+                FROM products
+                ORDER BY name ASC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+        else:
+            like = f"%{clean}%"
+            cur.execute(
+                """
+                SELECT id, name, barcode, sell_price, requires_prescription
+                FROM products
+                WHERE name LIKE ? OR barcode LIKE ?
+                ORDER BY name ASC
+                LIMIT ?
+                """,
+                (like, like, limit),
+            )
         rows = cur.fetchall()
     return [dict(row) for row in rows]
