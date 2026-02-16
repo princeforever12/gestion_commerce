@@ -50,3 +50,9 @@ python app.py
 ### Dépannage seed démo
 Si tu ne vois pas les produits de démonstration, ferme puis relance l'application.
 Le bootstrap ajoute désormais les **produits démo manquants** même si d'autres produits existent déjà.
+
+## Mini-projet complémentaire : Carnet d'adresses
+- Documentation dédiée : `README_CARNET_ADRESSES.md`
+- Module : `pharmacy_pos/carnet_adresses.py`
+- Tests : `tests/test_carnet_adresses.py`
+
