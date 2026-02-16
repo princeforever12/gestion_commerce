@@ -45,3 +45,8 @@ python app.py
 ```bash
 ./tools/sync_main.sh
 ```
+
+
+### Dépannage seed démo
+Si tu ne vois pas les produits de démonstration, ferme puis relance l'application.
+Le bootstrap ajoute désormais les **produits démo manquants** même si d'autres produits existent déjà.

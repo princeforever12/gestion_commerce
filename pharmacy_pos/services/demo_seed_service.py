@@ -5,20 +5,19 @@ from pharmacy_pos.services.product_service import create_product
 from pharmacy_pos.services.stock_service import add_stock
 
 
-def _has_products() -> bool:
+def _find_product_id_by_barcode(barcode: str) -> int | None:
     with db_cursor() as cur:
-        cur.execute("SELECT 1 FROM products LIMIT 1")
-        return cur.fetchone() is not None
+        cur.execute("SELECT id FROM products WHERE barcode = ?", (barcode,))
+        row = cur.fetchone()
+    return None if row is None else int(row["id"])
 
 
 def seed_demo_products() -> int:
-    """Injecte un jeu de données de démonstration si la base est vide.
+    """Injecte un jeu de données de démonstration.
 
-    Retourne le nombre de produits créés.
+    - N'ajoute que les produits démo manquants (idempotent par barcode).
+    - Retourne le nombre de produits nouvellement créés.
     """
-    if _has_products():
-        return 0
-
     soon = (date.today() + timedelta(days=45)).isoformat()
     mid = (date.today() + timedelta(days=180)).isoformat()
     far = (date.today() + timedelta(days=365)).isoformat()
@@ -83,18 +82,20 @@ def seed_demo_products() -> int:
 
     created = 0
     for row in demo:
-        product_id = create_product(
-            name=row["name"],
-            barcode=row["barcode"],
-            category_name=row["category"],
-            buy_price=row["buy"],
-            sell_price=row["sell"],
-            tva=row["tva"],
-            min_stock=row["min_stock"],
-            requires_prescription=row["rx"],
-        )
-        created += 1
-        for lot_num, expiry, qty in row["lots"]:
-            add_stock(product_id, lot_num, expiry, qty, reason="Seed démo")
+        product_id = _find_product_id_by_barcode(row["barcode"])
+        if product_id is None:
+            product_id = create_product(
+                name=row["name"],
+                barcode=row["barcode"],
+                category_name=row["category"],
+                buy_price=row["buy"],
+                sell_price=row["sell"],
+                tva=row["tva"],
+                min_stock=row["min_stock"],
+                requires_prescription=row["rx"],
+            )
+            created += 1
+            for lot_num, expiry, qty in row["lots"]:
+                add_stock(product_id, lot_num, expiry, qty, reason="Seed démo")
 
     return created
