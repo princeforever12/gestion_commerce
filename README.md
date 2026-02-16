@@ -5,6 +5,7 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 ## Fonctionnalités incluses
 - Initialisation DB SQLite.
 - Utilisateur admin par défaut (`admin` / `admin123`).
+- Jeu de produits de démonstration injecté automatiquement au premier lancement.
 - Interface de connexion.
 - UI modernisée: tables zébrées et barre d’astuce en dashboard.
 - Interface caisse (ajout de lignes + validation de vente).
