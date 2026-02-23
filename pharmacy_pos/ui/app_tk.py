@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from pharmacy_pos.services.auth_service import User, authenticate, create_user, list_users
+from pharmacy_pos.services.auth_service import User, authenticate, create_user, delete_user, list_users
 from pharmacy_pos.services.bootstrap_service import bootstrap
 from pharmacy_pos.services.product_service import create_product, delete_product, list_products, search_products
 from pharmacy_pos.services.report_service import sales_summary, top_products
@@ -293,8 +293,11 @@ class StockTab(ttk.Frame):
         container.columnconfigure(1, weight=2)
         container.rowconfigure(0, weight=1)
 
-        ttk.Label(left, text="Produits en stock", style="CardTitle.TLabel").pack(anchor="w")
-        ttk.Button(left, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_products).pack(anchor="e", pady=(0, 8))
+        top_controls = ttk.Frame(left, style="Card.TFrame")
+        top_controls.pack(fill="x", pady=(0, 8))
+        ttk.Label(top_controls, text="Produits en stock", style="CardTitle.TLabel").pack(side="left")
+        ttk.Button(top_controls, text="Supprimer produit", style="Secondary.TButton", command=self.delete_selected_product).pack(side="right", padx=(0, 6))
+        ttk.Button(top_controls, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_products).pack(side="right", padx=(0, 6))
 
         self.products = ttk.Treeview(left, columns=("id", "name", "stock", "sell", "min"), show="headings", height=16)
         for col, txt, w in [
@@ -311,7 +314,6 @@ class StockTab(ttk.Frame):
 
         actions_left = ttk.Frame(left, style="Card.TFrame")
         actions_left.pack(anchor="e")
-        ttk.Button(actions_left, text="Supprimer produit", style="Secondary.TButton", command=self.delete_selected_product).pack(side="left", padx=(0, 6))
         ttk.Button(actions_left, text="Alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(side="left", padx=(0, 6))
         ttk.Button(actions_left, text="Péremptions <= 90j", style="Secondary.TButton", command=self.show_expiry_alerts).pack(side="left")
 
@@ -716,9 +718,10 @@ class UserAdminTab(ttk.Frame):
         self.users.grid(row=5, column=0, columnspan=2, sticky="nsew")
         configure_tree_rows(self.users)
 
-        ttk.Button(card, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_users).grid(
-            row=6, column=1, sticky="e", pady=(8, 0)
-        )
+        actions = ttk.Frame(card, style="Card.TFrame")
+        actions.grid(row=6, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        ttk.Button(actions, text="Supprimer utilisateur", style="Secondary.TButton", command=self.delete_selected_user).pack(side="left", padx=(0, 6))
+        ttk.Button(actions, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_users).pack(side="left")
 
         card.columnconfigure(1, weight=1)
         card.rowconfigure(5, weight=1)
@@ -735,6 +738,32 @@ class UserAdminTab(ttk.Frame):
         self.u_name.set("")
         self.u_pass.set("")
         self.u_role.set("caissier")
+        self.refresh_users()
+
+    def delete_selected_user(self) -> None:
+        selected = self.users.selection()
+        if not selected:
+            messagebox.showwarning("Suppression", "Sélectionnez un utilisateur à supprimer")
+            return
+
+        values = self.users.item(selected[0], "values")
+        user_id = int(values[0])
+        username = str(values[1])
+
+        confirm = messagebox.askyesno(
+            "Confirmer suppression",
+            f"Supprimer l'utilisateur '{username}' (ID={user_id}) ?",
+        )
+        if not confirm:
+            return
+
+        try:
+            delete_user(user_id)
+        except Exception as exc:
+            messagebox.showerror("Erreur suppression", str(exc))
+            return
+
+        messagebox.showinfo("Succès", "Utilisateur supprimé")
         self.refresh_users()
 
     def refresh_users(self) -> None:

@@ -3,7 +3,13 @@ import unittest
 
 from pharmacy_pos.config import DB_PATH
 from pharmacy_pos.database import init_db
-from pharmacy_pos.services.auth_service import authenticate, create_user, ensure_default_admin, list_users
+from pharmacy_pos.services.auth_service import (
+    authenticate,
+    create_user,
+    delete_user,
+    ensure_default_admin,
+    list_users,
+)
 
 
 class AuthServiceTest(unittest.TestCase):
@@ -25,6 +31,18 @@ class AuthServiceTest(unittest.TestCase):
         users = list_users()
         usernames = [u["username"] for u in users]
         self.assertIn("admin", usernames)
+
+    def test_delete_user_removes_non_admin(self) -> None:
+        uid = create_user("tempuser", "pass1234", "caissier")
+        delete_user(uid)
+
+        usernames = [u["username"] for u in list_users()]
+        self.assertNotIn("tempuser", usernames)
+
+    def test_delete_user_blocks_default_admin(self) -> None:
+        admin = [u for u in list_users() if u["username"] == "admin"][0]
+        with self.assertRaises(ValueError):
+            delete_user(admin["id"])
 
 
 if __name__ == "__main__":

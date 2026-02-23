@@ -64,3 +64,21 @@ def authenticate(username: str, password: str) -> User | None:
     if row is None:
         return None
     return User(id=row["id"], username=row["username"], role=row["role"])
+
+
+
+def delete_user(user_id: int) -> None:
+    with db_cursor() as cur:
+        cur.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError("Utilisateur introuvable")
+
+        if row["username"] == "admin":
+            raise ValueError("Suppression impossible: le compte admin par défaut est protégé")
+
+        cur.execute("SELECT COUNT(*) AS n FROM sales WHERE cashier_id = ?", (user_id,))
+        if cur.fetchone()["n"] > 0:
+            raise ValueError("Suppression impossible: utilisateur déjà lié à des ventes")
+
+        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
