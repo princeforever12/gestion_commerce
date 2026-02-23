@@ -3,8 +3,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pharmacy_pos.services.auth_service import User, authenticate, create_user, list_users
 from pharmacy_pos.services.bootstrap_service import bootstrap
-from pharmacy_pos.services.product_service import create_product, list_products, search_products
-from pharmacy_pos.services.report_service import daily_sales_summary, top_products
+from pharmacy_pos.services.product_service import create_product, delete_product, list_products, search_products
+from pharmacy_pos.services.report_service import sales_summary, top_products
 from pharmacy_pos.services.sales_service import (
     cancel_sale,
     create_sale,
@@ -311,13 +311,13 @@ class StockTab(ttk.Frame):
 
         actions_left = ttk.Frame(left, style="Card.TFrame")
         actions_left.pack(anchor="e")
+        ttk.Button(actions_left, text="Supprimer produit", style="Secondary.TButton", command=self.delete_selected_product).pack(side="left", padx=(0, 6))
         ttk.Button(actions_left, text="Alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(side="left", padx=(0, 6))
         ttk.Button(actions_left, text="Péremptions <= 90j", style="Secondary.TButton", command=self.show_expiry_alerts).pack(side="left")
 
         ttk.Label(right, text="Nouveau produit", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
 
         self.p_name = tk.StringVar()
-        self.p_barcode = tk.StringVar()
         self.p_cat = tk.StringVar(value="Divers")
         self.p_buy = tk.StringVar(value="0")
         self.p_sell = tk.StringVar(value="0")
@@ -327,7 +327,6 @@ class StockTab(ttk.Frame):
 
         fields = [
             ("Nom", self.p_name),
-            ("Barcode", self.p_barcode),
             ("Catégorie", self.p_cat),
             ("Prix achat", self.p_buy),
             ("Prix vente", self.p_sell),
@@ -342,7 +341,13 @@ class StockTab(ttk.Frame):
                 entry.state(["disabled"])
 
         rx_chk = ttk.Checkbutton(right, text="Ordonnance requise", variable=self.p_rx)
-        rx_chk.grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 2))
+        rx_chk.grid(row=7, column=0, columnspan=2, sticky="w", pady=(6, 2))
+
+        ttk.Label(
+            right,
+            text="Barcode généré automatiquement",
+            style="Subtitle.TLabel",
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
         create_btn = ttk.Button(right, text="Créer produit", style="Primary.TButton", command=self.create_product_ui)
         create_btn.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(6, 12))
@@ -401,7 +406,7 @@ class StockTab(ttk.Frame):
         try:
             pid = create_product(
                 name=self.p_name.get().strip(),
-                barcode=self.p_barcode.get().strip(),
+                barcode=None,
                 category_name=self.p_cat.get().strip(),
                 buy_price=float(self.p_buy.get().strip()),
                 sell_price=float(self.p_sell.get().strip()),
@@ -434,6 +439,37 @@ class StockTab(ttk.Frame):
         messagebox.showinfo("Succès", f"Lot ajouté ID={batch_id}")
         self.refresh_products()
 
+
+
+    def delete_selected_product(self) -> None:
+        if not self.can_manage:
+            messagebox.showwarning("Accès refusé", "Seul un admin peut supprimer un produit")
+            return
+
+        selected = self.products.selection()
+        if not selected:
+            messagebox.showwarning("Suppression", "Sélectionnez un produit à supprimer")
+            return
+
+        values = self.products.item(selected[0], "values")
+        product_id = int(values[0])
+        product_name = str(values[1])
+
+        confirm = messagebox.askyesno(
+            "Confirmer suppression",
+            f"Supprimer le produit '{product_name}' (ID={product_id}) ?",
+        )
+        if not confirm:
+            return
+
+        try:
+            delete_product(product_id)
+        except Exception as exc:
+            messagebox.showerror("Erreur suppression", str(exc))
+            return
+
+        messagebox.showinfo("Succès", "Produit supprimé")
+        self.refresh_products()
 
     def show_expiry_alerts(self) -> None:
         rows = get_expiring_batches(90)
@@ -721,7 +757,20 @@ class ReportTab(ttk.Frame):
 
         top_bar = ttk.Frame(card, style="Card.TFrame")
         top_bar.pack(fill="x")
-        ttk.Label(top_bar, text="Rapports du jour", style="CardTitle.TLabel").pack(side="left")
+        ttk.Label(top_bar, text="Rapports", style="CardTitle.TLabel").pack(side="left")
+
+        ttk.Label(top_bar, text="Période", style="Subtitle.TLabel").pack(side="left", padx=(16, 6))
+        self.period_var = tk.StringVar(value="jour")
+        self.period_select = ttk.Combobox(
+            top_bar,
+            textvariable=self.period_var,
+            values=("jour", "semaine", "mois", "annee"),
+            state="readonly",
+            width=10,
+        )
+        self.period_select.pack(side="left")
+        self.period_select.bind("<<ComboboxSelected>>", lambda _e: self.refresh())
+
         ttk.Button(top_bar, text="Exporter CSV", style="Secondary.TButton", command=self.export_csv_reports).pack(side="right", padx=(0, 6))
         ttk.Button(top_bar, text="Rafraîchir", style="Primary.TButton", command=self.refresh).pack(side="right")
 
@@ -774,7 +823,8 @@ class ReportTab(ttk.Frame):
         messagebox.showinfo("Export CSV", "Fichiers générés:\n- " + "\n- ".join(files))
 
     def refresh(self) -> None:
-        data = daily_sales_summary()
+        period = self.period_var.get().strip() or "jour"
+        data = sales_summary(period)
         self.nb_ventes.set(str(data["nb_ventes"]))
         self.total_ht.set(f"{data['total_ht']:.2f}")
         self.total_tva.set(f"{data['total_tva']:.2f}")
@@ -782,7 +832,7 @@ class ReportTab(ttk.Frame):
 
         for iid in self.top.get_children():
             self.top.delete(iid)
-        for row in top_products():
+        for row in top_products(period=period):
             append_tree_row(self.top, (row["name"], row["qty_vendue"], f"{row['montant']:.2f}"))
 
 

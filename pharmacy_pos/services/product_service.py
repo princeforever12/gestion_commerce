@@ -1,3 +1,6 @@
+import time
+from random import randint
+
 from pharmacy_pos.database import db_cursor
 
 
@@ -8,9 +11,15 @@ def create_category(name: str) -> int:
         return cur.fetchone()["id"]
 
 
+def generate_barcode() -> str:
+    stamp = int(time.time() * 1000)
+    suffix = randint(100, 999)
+    return f"AUTO{stamp}{suffix}"
+
+
 def create_product(
     name: str,
-    barcode: str,
+    barcode: str | None,
     category_name: str,
     buy_price: float,
     sell_price: float,
@@ -18,6 +27,20 @@ def create_product(
     min_stock: int,
     requires_prescription: bool,
 ) -> int:
+    name = name.strip()
+    category_name = category_name.strip()
+
+    if not name:
+        raise ValueError("Le nom du produit est obligatoire")
+    if not category_name:
+        raise ValueError("La catégorie du produit est obligatoire")
+    if buy_price < 0 or sell_price < 0 or tva < 0 or min_stock < 0:
+        raise ValueError("Les valeurs numériques doivent être positives")
+
+    clean_barcode = (barcode or "").strip()
+    if not clean_barcode:
+        clean_barcode = generate_barcode()
+
     category_id = create_category(category_name)
     with db_cursor() as cur:
         cur.execute(
@@ -29,7 +52,7 @@ def create_product(
             """,
             (
                 name,
-                barcode,
+                clean_barcode,
                 category_id,
                 buy_price,
                 sell_price,
@@ -39,6 +62,23 @@ def create_product(
             ),
         )
         return cur.lastrowid
+
+
+def delete_product(product_id: int) -> None:
+    with db_cursor() as cur:
+        cur.execute("SELECT id FROM products WHERE id = ?", (product_id,))
+        if cur.fetchone() is None:
+            raise ValueError("Produit introuvable")
+
+        cur.execute("SELECT COUNT(*) AS n FROM sale_items WHERE product_id = ?", (product_id,))
+        if cur.fetchone()["n"] > 0:
+            raise ValueError("Suppression impossible: produit déjà lié à des ventes")
+
+        cur.execute("SELECT COUNT(*) AS n FROM stock_movements WHERE product_id = ?", (product_id,))
+        if cur.fetchone()["n"] > 0:
+            raise ValueError("Suppression impossible: produit déjà lié à des mouvements de stock")
+
+        cur.execute("DELETE FROM products WHERE id = ?", (product_id,))
 
 
 def list_products() -> list[dict]:
