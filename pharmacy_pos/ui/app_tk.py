@@ -319,10 +319,23 @@ class StockTab(ttk.Frame):
         top_controls = ttk.Frame(left, style="Card.TFrame")
         top_controls.pack(fill="x", pady=(0, 8))
         ttk.Label(top_controls, text="Produits en stock", style="CardTitle.TLabel").pack(side="left")
+<<<<<<< codex/propose-complete-cash-register-system-design-bftfhv
+
+        ttk.Button(top_controls, text="Péremptions <= 90j", style="Secondary.TButton", command=self.show_expiry_alerts).pack(side="right")
+        ttk.Button(top_controls, text="Alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(side="right", padx=(0, 6))
+        ttk.Button(top_controls, text="Supprimer produit", style="Secondary.TButton", command=self.delete_selected_product).pack(side="right", padx=(0, 6))
+        ttk.Button(top_controls, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_products).pack(side="right", padx=(0, 6))
+
+        products_wrap = ttk.Frame(left, style="Card.TFrame")
+        products_wrap.pack(fill="both", expand=True)
+
+        self.products = ttk.Treeview(products_wrap, columns=("id", "name", "stock", "sell", "min"), show="headings", height=16)
+=======
         ttk.Button(top_controls, text="Supprimer produit", style="Secondary.TButton", command=self.delete_selected_product).pack(side="right", padx=(0, 6))
         ttk.Button(top_controls, text="Rafraîchir", style="Secondary.TButton", command=self.refresh_products).pack(side="right", padx=(0, 6))
 
         self.products = ttk.Treeview(left, columns=("id", "name", "stock", "sell", "min"), show="headings", height=16)
+>>>>>>> main
         for col, txt, w in [
             ("id", "ID", 60),
             ("name", "Nom", 180),
@@ -332,6 +345,16 @@ class StockTab(ttk.Frame):
         ]:
             self.products.heading(col, text=txt)
             self.products.column(col, width=w, anchor="center" if col != "name" else "w")
+<<<<<<< codex/propose-complete-cash-register-system-design-bftfhv
+
+        products_scroll_y = ttk.Scrollbar(products_wrap, orient="vertical", command=self.products.yview)
+        self.products.configure(yscrollcommand=products_scroll_y.set)
+
+        self.products.pack(side="left", fill="both", expand=True)
+        products_scroll_y.pack(side="right", fill="y")
+        configure_tree_rows(self.products)
+
+=======
         self.products.pack(fill="both", expand=True, pady=(0, 8))
         configure_tree_rows(self.products)
 
@@ -340,6 +363,7 @@ class StockTab(ttk.Frame):
         ttk.Button(actions_left, text="Alertes stock bas", style="Primary.TButton", command=self.show_alerts).pack(side="left", padx=(0, 6))
         ttk.Button(actions_left, text="Péremptions <= 90j", style="Secondary.TButton", command=self.show_expiry_alerts).pack(side="left")
 
+>>>>>>> main
         ttk.Label(right, text="Nouveau produit", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
 
         self.p_name = tk.StringVar()
