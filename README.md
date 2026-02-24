@@ -19,6 +19,10 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 - Vente avec décrémentation FIFO du stock.
 - Rapports ventes **par période**: jour / semaine / mois / année.
 - Top produits filtré par période dans l’onglet rapports.
+- Gestion des rôles: admin / caissier / pharmacien.
+- Onglet admin pour créer des utilisateurs.
+- Vente avec décrémentation FIFO du stock.
+- Rapport du jour (total HT/TVA/TTC) et top produits.
 - Historique des ventes avec détail par ticket.
 - Annulation ticket et retour partiel depuis l'historique.
 - Export ticket texte (TXT) depuis l'historique.
@@ -48,12 +52,14 @@ pytest -q
 ## Notes
 - La couche métier est découplée de l'UI, ce qui facilite le passage futur vers FastAPI/Streamlit si besoin.
 
+
 ## Workflow Git (anti-conflits)
 - Guide détaillé: `docs/GIT_MERGE_GUIDE.md`
 - Script d'aide (depuis ta branche de PR):
 ```bash
 ./tools/sync_main.sh
 ```
+
 
 ### Dépannage seed démo
 Si tu ne vois pas les produits de démonstration, ferme puis relance l'application.
