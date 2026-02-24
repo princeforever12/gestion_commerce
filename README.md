@@ -11,6 +11,14 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 - Interface caisse (ajout de lignes + validation de vente).
 - Recherche produit en caisse (nom / code-barres).
 - Interface stock (création produit, ajout de lot, listing stock).
+- **Barcode produit généré automatiquement** à la création (champ masqué en UI).
+- **Suppression produit** depuis l’onglet stock (avec contrôles d’intégrité).
+- Gestion des rôles: admin / caissier / pharmacien.
+- Onglet admin pour créer des utilisateurs.
+- **Suppression utilisateur** depuis l’onglet admin (avec protections: admin par défaut + utilisateurs liés à des ventes).
+- Vente avec décrémentation FIFO du stock.
+- Rapports ventes **par période**: jour / semaine / mois / année.
+- Top produits filtré par période dans l’onglet rapports.
 - Gestion des rôles: admin / caissier / pharmacien.
 - Onglet admin pour créer des utilisateurs.
 - Vente avec décrémentation FIFO du stock.
@@ -23,10 +31,16 @@ Ce dépôt contient un **MVP fonctionnel** pour démarrer un projet de gestion d
 - Alerte de péremption (lots <= 90 jours).
 - Exclusion des lots expirés lors des ventes (FIFO sur lots valides).
 - Contrôle ordonnance pour produits sensibles (validation à la caisse).
+- Scrollbar verticale sur le tableau des produits stock + panneau stock droit scrollable pour petites fenêtres.
 
 ## Lancement
 ```bash
 python app.py
+```
+
+## Tests
+```bash
+pytest -q
 ```
 
 ## Structure
