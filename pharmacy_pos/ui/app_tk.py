@@ -286,8 +286,31 @@ class StockTab(ttk.Frame):
 
         left = ttk.Frame(container, style="Card.TFrame", padding=12)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        right = ttk.Frame(container, style="Card.TFrame", padding=12)
-        right.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+
+        right_wrap = ttk.Frame(container, style="Card.TFrame")
+        right_wrap.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+
+        right_canvas = tk.Canvas(
+            right_wrap,
+            background=Palette.CARD,
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        right_scroll = ttk.Scrollbar(right_wrap, orient="vertical", command=right_canvas.yview)
+        right_canvas.configure(yscrollcommand=right_scroll.set)
+
+        right_scroll.pack(side="right", fill="y")
+        right_canvas.pack(side="left", fill="both", expand=True)
+
+        right = ttk.Frame(right_canvas, style="Card.TFrame", padding=12)
+        right_window = right_canvas.create_window((0, 0), window=right, anchor="nw")
+
+        def _sync_right_scroll(_event=None) -> None:
+            right_canvas.configure(scrollregion=right_canvas.bbox("all"))
+            right_canvas.itemconfigure(right_window, width=right_canvas.winfo_width())
+
+        right.bind("<Configure>", _sync_right_scroll)
+        right_canvas.bind("<Configure>", _sync_right_scroll)
 
         container.columnconfigure(0, weight=3)
         container.columnconfigure(1, weight=2)
